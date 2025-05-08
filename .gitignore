@@ -1,0 +1,4 @@
+# .gitignore 내용
+.env
+__pycache__/
+*.pyc
