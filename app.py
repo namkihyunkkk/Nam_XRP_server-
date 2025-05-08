@@ -7,23 +7,22 @@ import json
 import math
 from dotenv import load_dotenv
 
+# 환경변수 로딩
 load_dotenv()
 app = Flask(__name__)
 
+# 환경변수 값 읽기
 OKX_API_KEY = os.getenv("OKX_API_KEY")
 OKX_API_SECRET = os.getenv("OKX_API_SECRET")
 OKX_API_PASSPHRASE = os.getenv("OKX_PASSPHRASE")
 WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET")
 OKX_TRADE_URL = "https://www.okx.com"
 
-# ✅ PASSPHRASE 출력 확인용
-print("✅ PASSPHRASE:", repr(OKX_API_PASSPHRASE))
-
 # ✅ OKX 서버 시간 동기화
 def get_okx_server_timestamp():
     response = requests.get("https://www.okx.com/api/v5/public/time")
-    server_time = response.json()["data"][0]["ts"]  # 밀리초 단위
-    return str(int(server_time) / 1000)  # 초 단위 문자열
+    server_time = response.json()["data"][0]["ts"]
+    return str(int(server_time) / 1000)
 
 # ✅ 시그니처 생성
 def generate_signature(timestamp, method, request_path, body):
@@ -34,7 +33,7 @@ def generate_signature(timestamp, method, request_path, body):
         digestmod=hashlib.sha256
     ).hexdigest()
 
-# ✅ 주문 처리
+# ✅ 주문 처리 함수
 def place_order(symbol, side, size):
     min_order_sizes = {
         'BTC-USDT-SWAP': (0.001, 3),
@@ -48,7 +47,7 @@ def place_order(symbol, side, size):
     path = "/api/v5/trade/order"
     timestamp = get_okx_server_timestamp()
 
-    # 최소 수량 반영
+    # 최소 주문 수량 반영 및 반올림
     min_size, decimals = min_order_sizes.get(symbol, (1.0, 0))
     raw_size = max(float(size), min_size)
     factor = 10 ** decimals
@@ -61,6 +60,8 @@ def place_order(symbol, side, size):
         "ordType": "market",
         "sz": str(final_size)
     }
+
+    # ✅ JSON 직렬화 시 공백 없이 생성해야 서명 오류 없음
     body_json = json.dumps(body, separators=(',', ':'), ensure_ascii=False)
 
     headers = {
