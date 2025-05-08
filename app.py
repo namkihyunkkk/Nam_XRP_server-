@@ -5,8 +5,8 @@ import time
 import requests
 import os
 import json
-import math
 from dotenv import load_dotenv
+from datetime import datetime, timezone
 
 load_dotenv()
 app = Flask(__name__)
@@ -28,6 +28,7 @@ def generate_signature(timestamp, method, request_path, body):
     return hmac.new(bytes(OKX_API_SECRET, encoding='utf8'), msg=message.encode(), digestmod=hashlib.sha256).hexdigest()
 
 def place_order(symbol, side, size):
+    # 최소 주문 수량 설정
     min_order_sizes = {
         'BTC-USDT-SWAP': (0.001, 3),
         'ETH-USDT-SWAP': (0.01, 2),
@@ -36,31 +37,29 @@ def place_order(symbol, side, size):
         'SOL-USDT-SWAP': (0.1, 1),
         'DOGE-USDT-SWAP': (10.0, 0)
     }
-
-    timestamp = str(time.time())
+    timestamp = datetime.now(timezone.utc).isoformat(timespec='milliseconds').replace('+00:00', 'Z')
     path = "/api/v5/trade/order"
-
-    # 최소 수량 절삭 처리
-    min_size, decimals = min_order_sizes.get(symbol, (1.0, 0))
-    raw_size = max(float(size), min_size)
-    factor = 10 ** decimals
-    final_size = math.floor(raw_size * factor) / factor
-
     body = {
         "instId": symbol,
         "tdMode": "cross",
         "side": "buy" if side == "BUY" else "sell",
         "ordType": "market",
-        "sz": str(final_size)
+        "sz": size
     }
-
     body_json = json.dumps(body)
     HEADERS.update({
         "OK-ACCESS-TIMESTAMP": timestamp,
         "OK-ACCESS-SIGN": generate_signature(timestamp, "POST", path, body_json)
     })
+    # 최소 수량 체크 및 반영
+    min_size, decimals = min_order_sizes.get(symbol, (1.0, 0))
+    import math
+    raw_size = max(float(size), min_size)
+    factor = 10 ** decimals
+    final_size = math.floor(raw_size * factor) / factor
+    body["sz"] = str(final_size)
 
-    response = requests.post(OKX_TRADE_URL + path, headers=HEADERS, data=body_json)
+    response = requests.post(OKX_TRADE_URL + path, headers=HEADERS, data=json.dumps(body))
     return response.json()
 
 @app.route("/webhook", methods=["POST"])
